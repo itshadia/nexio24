@@ -30,6 +30,7 @@ export default function CustomerAuthModal({ isOpen, onClose }: CustomerAuthModal
   const [room, setRoom] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -37,38 +38,54 @@ export default function CustomerAuthModal({ isOpen, onClose }: CustomerAuthModal
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccessMsg("");
     if (!email || !password) {
       setError("Please fill in your email and password.");
       return;
     }
 
     setLoading(true);
-    try {
-      await signInCustomer(email, password);
-      setLoading(false);
+    const res = await signInCustomer(email, password);
+    setLoading(false);
+
+    if (res.success) {
+      setPassword("");
       onClose();
-    } catch {
-      setError("Sign in failed. Please try again.");
-      setLoading(false);
+    } else {
+      setError(res.error || "Sign in failed. Please check your credentials.");
     }
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccessMsg("");
     if (!name || !email || !password) {
       setError("Please provide your name, email, and password.");
       return;
     }
 
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
+
     setLoading(true);
-    try {
-      await signUpCustomer({ name, email, password, room, phone });
-      setLoading(false);
-      onClose();
-    } catch {
-      setError("Registration failed. Please try again.");
-      setLoading(false);
+    const res = await signUpCustomer({ name, email, password, room, phone });
+    setLoading(false);
+
+    if (res.success) {
+      setPassword("");
+      if (res.needsEmailConfirmation) {
+        setSuccessMsg(
+          "Registration successful! Please check your email inbox to confirm your account, then sign in."
+        );
+        setActiveTab("signin");
+      } else {
+        onClose();
+      }
+    } else {
+      setError(res.error || "Registration failed. Please try again.");
     }
   };
 
@@ -162,6 +179,7 @@ export default function CustomerAuthModal({ isOpen, onClose }: CustomerAuthModal
                   onClick={() => {
                     setActiveTab("signin");
                     setError("");
+                    setSuccessMsg("");
                   }}
                   className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     activeTab === "signin"
@@ -176,6 +194,7 @@ export default function CustomerAuthModal({ isOpen, onClose }: CustomerAuthModal
                   onClick={() => {
                     setActiveTab("signup");
                     setError("");
+                    setSuccessMsg("");
                   }}
                   className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     activeTab === "signup"
@@ -190,6 +209,13 @@ export default function CustomerAuthModal({ isOpen, onClose }: CustomerAuthModal
               {error && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
                   {error}
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <span>{successMsg}</span>
                 </div>
               )}
 

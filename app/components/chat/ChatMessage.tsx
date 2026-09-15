@@ -56,24 +56,35 @@ export default function ChatMessage({
 
         {/* Optional Ticket Creation Badge */}
         {message.ticketId && !isUser && (
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[11px] font-semibold text-indigo-700">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Operations Ticket {message.ticketId}</span>
-            {message.category && (
-              <span className="px-1.5 py-0.5 rounded bg-indigo-100/70 text-indigo-800 text-[10px]">
-                {message.category}
-              </span>
-            )}
-            {message.priority && (
-              <span
-                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                  message.priority === "High"
-                    ? "bg-amber-100 text-amber-800"
-                    : "bg-slate-100 text-slate-700"
-                }`}
-              >
-                {message.priority}
-              </span>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[11px] font-semibold text-indigo-700">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Operations Ticket {message.ticketId}</span>
+              {message.category && (
+                <span className="px-1.5 py-0.5 rounded bg-indigo-100/70 text-indigo-800 text-[10px]">
+                  {message.category}
+                </span>
+              )}
+              {message.priority && (
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                    message.priority === "Critical"
+                      ? "bg-rose-100 text-rose-800"
+                      : message.priority === "High"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  {message.priority}
+                </span>
+              )}
+            </div>
+
+            {message.approvalRequired && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-700">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <span>Pending Manager Approval</span>
+              </div>
             )}
           </div>
         )}

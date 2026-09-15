@@ -17,7 +17,8 @@ export interface MessageItem {
   ticketId?: string;
   category?: "Booking" | "Maintenance" | "Refund" | "Support" | "General";
   priority?: "Low" | "Medium" | "High" | "Critical";
-  status?: "Open" | "In Progress" | "Resolved";
+  status?: "Open" | "In Progress" | "Resolved" | "Escalated";
+  approvalRequired?: boolean;
 }
 
 export const QUICK_PROMPTS = [

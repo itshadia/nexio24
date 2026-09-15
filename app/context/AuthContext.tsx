@@ -24,15 +24,22 @@ interface AuthContextType {
   customer: CustomerUser | null;
   loading: boolean;
   signOutAdmin: () => Promise<void>;
-  signInCustomer: (email: string, password?: string) => Promise<boolean>;
+  signInCustomer: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   signUpCustomer: (data: {
     name: string;
     email: string;
-    password?: string;
+    password: string;
     room?: string;
     phone?: string;
-  }) => Promise<boolean>;
-  signOutCustomer: () => void;
+  }) => Promise<{
+    success: boolean;
+    needsEmailConfirmation?: boolean;
+    error?: string;
+  }>;
+  signOutCustomer: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [customer, setCustomer] = useState<CustomerUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Sync Supabase Auth session for Admin
+  // Sync Supabase Auth session for both Admin and Customer
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -53,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("id, name, email, role")
+            .select("id, name, email, role, room, phone")
             .eq("id", session.user.id)
             .single();
 
@@ -66,7 +73,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               avatar:
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
             });
+            setCustomer(null);
+          } else {
+            // Customer persona
+            setCustomer({
+              id: session.user.id,
+              name:
+                profile?.name ||
+                session.user.user_metadata?.name ||
+                session.user.email?.split("@")[0] ||
+                "Guest",
+              email: profile?.email || session.user.email || "",
+              room:
+                profile?.room ||
+                session.user.user_metadata?.room ||
+                "Guest Suite",
+              phone:
+                profile?.phone ||
+                session.user.user_metadata?.phone ||
+                "",
+            });
+            setAdmin(null);
           }
+        } else {
+          setAdmin(null);
+          setCustomer(null);
         }
       } catch (err) {
         console.error("Session check error:", err);
@@ -83,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("id, name, email, role")
+            .select("id, name, email, role, room, phone")
             .eq("id", session.user.id)
             .single();
 
@@ -96,25 +127,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               avatar:
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
             });
+            setCustomer(null);
+          } else {
+            // Customer persona
+            setCustomer({
+              id: session.user.id,
+              name:
+                profile?.name ||
+                session.user.user_metadata?.name ||
+                session.user.email?.split("@")[0] ||
+                "Guest",
+              email: profile?.email || session.user.email || "",
+              room:
+                profile?.room ||
+                session.user.user_metadata?.room ||
+                "Guest Suite",
+              phone:
+                profile?.phone ||
+                session.user.user_metadata?.phone ||
+                "",
+            });
+            setAdmin(null);
           }
         } else {
           setAdmin(null);
+          setCustomer(null);
         }
         setLoading(false);
       }
     );
-
-    // Restore guest/customer session from localStorage if present
-    if (typeof window !== "undefined") {
-      const savedCustomer = localStorage.getItem("nexio_active_customer");
-      if (savedCustomer) {
-        try {
-          setCustomer(JSON.parse(savedCustomer));
-        } catch {
-          // ignore corrupted data
-        }
-      }
-    }
 
     return () => {
       authListener.subscription.unsubscribe();
@@ -126,69 +167,119 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAdmin(null);
   };
 
-  const signInCustomer = async (email: string) => {
-    let existingName = email.split("@")[0].replace(".", " ");
-    existingName = existingName.charAt(0).toUpperCase() + existingName.slice(1);
+  const signInCustomer = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("nexio_registered_customers");
-      if (stored) {
-        try {
-          const list = JSON.parse(stored);
-          const found = list.find(
-            (u: any) => u.email.toLowerCase() === email.toLowerCase()
-          );
-          if (found) existingName = found.name;
-        } catch {}
+      if (error || !data.user) {
+        return {
+          success: false,
+          error: error?.message || "Invalid credentials. Please verify email and password.",
+        };
       }
-    }
 
-    const user: CustomerUser = {
-      id: `cust-${Date.now()}`,
-      name: existingName,
-      email: email.toLowerCase(),
-      room: "Guest Room",
-    };
+      // Fetch customer profile details
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, name, email, role, room, phone")
+        .eq("id", data.user.id)
+        .single();
 
-    setCustomer(user);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("nexio_active_customer", JSON.stringify(user));
+      const user: CustomerUser = {
+        id: data.user.id,
+        name:
+          profile?.name ||
+          data.user.user_metadata?.name ||
+          email.split("@")[0],
+        email: profile?.email || data.user.email || email.trim(),
+        room:
+          profile?.room ||
+          data.user.user_metadata?.room ||
+          "Guest Suite",
+        phone:
+          profile?.phone ||
+          data.user.user_metadata?.phone ||
+          "",
+      };
+
+      setCustomer(user);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || "An authentication error occurred." };
     }
-    return true;
   };
 
   const signUpCustomer = async (data: {
     name: string;
     email: string;
-    password?: string;
+    password: string;
     room?: string;
     phone?: string;
-  }) => {
-    const newUser: CustomerUser = {
-      id: `cust-${Date.now()}`,
-      name: data.name.trim(),
-      email: data.email.trim().toLowerCase(),
-      room: data.room?.trim() || "Guest Suite",
-      phone: data.phone?.trim() || "",
-    };
+  }): Promise<{
+    success: boolean;
+    needsEmailConfirmation?: boolean;
+    error?: string;
+  }> => {
+    try {
+      const cleanEmail = data.email.trim().toLowerCase();
 
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("nexio_registered_customers");
-      const list = stored ? JSON.parse(stored) : [];
-      list.push(newUser);
-      localStorage.setItem("nexio_registered_customers", JSON.stringify(list));
-      localStorage.setItem("nexio_active_customer", JSON.stringify(newUser));
+      // 1. Call server API to create and auto-confirm user in Supabase
+      const res = await fetch("/api/auth/customer-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name.trim(),
+          email: cleanEmail,
+          password: data.password,
+          room: data.room?.trim() || "Guest Suite",
+          phone: data.phone?.trim() || "",
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        return {
+          success: false,
+          error: result.error || "Could not register account. Please try again.",
+        };
+      }
+
+      // 2. Immediately sign in the guest to create the Supabase client session
+      const { data: signInData, error: signInErr } =
+        await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: data.password,
+        });
+
+      if (signInErr || !signInData.user) {
+        // Fallback: If sign in threw an error, user is registered
+        return { success: true, needsEmailConfirmation: false };
+      }
+
+      const user: CustomerUser = {
+        id: result.user.id,
+        name: result.user.name,
+        email: cleanEmail,
+        room: result.user.room,
+        phone: result.user.phone,
+      };
+      setCustomer(user);
+
+      return { success: true, needsEmailConfirmation: false };
+    } catch (err: any) {
+      return { success: false, error: err?.message || "An error occurred during registration." };
     }
-
-    setCustomer(newUser);
-    return true;
   };
 
-  const signOutCustomer = () => {
+  const signOutCustomer = async () => {
+    await supabase.auth.signOut();
     setCustomer(null);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("nexio_active_customer");
-    }
   };
 
   return (

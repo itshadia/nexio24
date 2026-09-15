@@ -62,6 +62,7 @@ export default function ChatWidget({
 
   const [inputVal, setInputVal] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [sessionTicketId, setSessionTicketId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -82,7 +83,7 @@ export default function ChatWidget({
     }
   }, [initialPrompt]);
 
-  const sendMessage = (textToSend?: string) => {
+  const sendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputVal).trim();
     if (!query) return;
 
@@ -98,14 +99,62 @@ export default function ChatWidget({
     setInputVal("");
     setIsTyping(true);
 
-    // Simulate realistic AI Agent latency (600ms - 950ms)
-    setTimeout(() => {
-      const responseData = getAIResponse(query);
+    try {
+      const res = await fetch("/api/chat/triage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: query,
+          ticketId: sessionTicketId,
+          customer: customer
+            ? {
+                id: customer.id,
+                name: customer.name,
+                email: customer.email,
+                room: customer.room,
+              }
+            : {
+                name: "Guest",
+                email: "guest@nexio24.com",
+                room: "Guest Suite",
+              },
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Triage API response error");
+      }
+
+      const data = await res.json();
+
+      // Remember session ticket id so subsequent conversation is tied to the same ticket thread
+      if (data.ticket?.id) {
+        setSessionTicketId(data.ticket.id);
+      }
 
       const agentMsg: MessageItem = {
         id: `agent-${Date.now()}`,
         sender: "agent",
-        senderName: "Nexio24 AI Agent",
+        senderName: "Nexio24 AI Concierge",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        text: data.ai_reply,
+        card: data.card,
+        ticketId: data.ticket?.create_ticket ? data.ticket?.ticket_number : undefined,
+        category: data.category,
+        priority: data.priority,
+        status: data.ticket?.status || "Open",
+        approvalRequired: data.approval_required,
+      };
+
+      setMessages((prev) => [...prev, agentMsg]);
+    } catch (err) {
+      console.error("Chat triage API error:", err);
+      // Graceful local fallback in case of connection failure
+      const responseData = getAIResponse(query);
+      const agentMsg: MessageItem = {
+        id: `agent-${Date.now()}`,
+        sender: "agent",
+        senderName: "Nexio24 AI Concierge",
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         text: responseData.replyText,
         card: responseData.card,
@@ -114,10 +163,10 @@ export default function ChatWidget({
         priority: responseData.priority,
         status: responseData.status,
       };
-
       setMessages((prev) => [...prev, agentMsg]);
+    } finally {
       setIsTyping(false);
-    }, 750);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -128,6 +177,7 @@ export default function ChatWidget({
   };
 
   const handleReset = () => {
+    setSessionTicketId(null);
     setMessages([
       {
         id: `welcome-${Date.now()}`,

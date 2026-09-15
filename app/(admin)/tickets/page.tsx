@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -13,8 +13,10 @@ import {
   ChevronRight,
   Sparkles,
   ExternalLink,
+  RotateCw,
 } from "lucide-react";
 import AdminHeader from "../../components/admin/AdminHeader";
+import { supabase } from "@/lib/supabase/client";
 
 export interface TicketItem {
   id: string;
@@ -24,7 +26,7 @@ export interface TicketItem {
   subject: string;
   type: "Maintenance" | "Booking" | "Support" | "Refund";
   priority: "High" | "Medium" | "Low" | "Critical";
-  status: "Open" | "In Progress" | "Resolved";
+  status: "Open" | "In Progress" | "Resolved" | "Escalated";
   created: string;
   confidence: number;
 }
@@ -95,6 +97,60 @@ export default function TicketsPage() {
   const [filterTab, setFilterTab] = useState<"All" | "Open" | "In Progress" | "Resolved">("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [tickets, setTickets] = useState<TicketItem[]>(INITIAL_TICKETS);
+  const [loading, setLoading] = useState(false);
+
+  const fetchTickets = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("tickets")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const liveTickets: TicketItem[] = data.map((t: any) => {
+          let category: TicketItem["type"] = "Support";
+          if (t.category === "maintenance") category = "Maintenance";
+          else if (t.category === "booking") category = "Booking";
+          else if (t.category === "refund") category = "Refund";
+
+          let priority: TicketItem["priority"] = "Medium";
+          if (t.priority === "critical") priority = "Critical";
+          else if (t.priority === "high") priority = "High";
+          else if (t.priority === "low") priority = "Low";
+
+          let status: TicketItem["status"] = "Open";
+          if (t.status === "in_progress") status = "In Progress";
+          else if (t.status === "resolved") status = "Resolved";
+          else if (t.status === "escalated") status = "Escalated";
+
+          return {
+            id: t.ticket_number,
+            customer: t.customer_name || "Guest",
+            email: t.customer_email || "guest@nexio24.com",
+            room: t.customer_room || "Room",
+            subject: t.subject,
+            type: category,
+            priority: priority,
+            status: status,
+            created: new Date(t.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            confidence: 0.95,
+          };
+        });
+
+        // Combine live Supabase tickets with initial mock tickets
+        setTickets(liveTickets);
+      }
+    } catch {
+      // Keep fallback tickets
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTickets();
+  }, []);
 
   const filteredTickets = tickets.filter((t) => {
     if (filterTab !== "All" && t.status !== filterTab) return false;
@@ -128,13 +184,25 @@ export default function TicketsPage() {
             </p>
           </div>
 
-          <Link
-            href="/tickets/1245"
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Ticket</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchTickets}
+              disabled={loading}
+              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Refresh tickets from Supabase"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              <span>Refresh</span>
+            </button>
+
+            <Link
+              href="/tickets/1245"
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Ticket</span>
+            </Link>
+          </div>
         </div>
 
         {/* Filters & Search Row */}

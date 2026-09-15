@@ -51,7 +51,6 @@ SET
   is_sso_user = COALESCE(is_sso_user, false),
   is_anonymous = COALESCE(is_anonymous, false),
   confirmed_at = COALESCE(confirmed_at, email_confirmed_at, now())
-  email_confirmed_at = COALESCE(email_confirmed_at, now())
 WHERE email = 'admin@nexio24.com';
 
 -- 4. Add identity row in auth.identities if missing (GoTrue requirement)
