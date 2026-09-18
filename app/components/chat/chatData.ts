@@ -9,7 +9,7 @@ export interface ChatCardData {
 
 export interface MessageItem {
   id: string;
-  sender: "user" | "agent" | "system";
+  sender: "user" | "agent" | "system" | "staff";
   senderName?: string;
   timestamp: string;
   text: string;

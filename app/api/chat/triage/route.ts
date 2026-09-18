@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 interface TriageResult {
@@ -343,17 +343,31 @@ export async function POST(req: Request) {
     }
 
     // 3. If High Risk / Refund: Persist into Supabase approvals table
+    // 3. If High Risk / Maintenance / Refund: Persist into Supabase approvals table
     if (triage.requires_human_approval && activeTicket?.id) {
+      const isRefund = triage.category?.toLowerCase() === "refund" || triage.intent === "refund";
+      const action = triage.approval_action || (isRefund ? "issue_refund" : "dispatch_technician");
+      const reason =
+        triage.approval_reason ||
+        (isRefund
+          ? "Guest requested refund/compensation"
+          : `Guest requested room maintenance / repair: "${message.slice(0, 60)}"`);
+
+      const payload: any = {
+        guest_name: guestName,
+        guest_room: guestRoom,
+        complaint: message,
+      };
+
+      if (isRefund || triage.approval_amount) {
+        payload.amount = triage.approval_amount || 100;
+      }
+
       await supabaseAdmin.from("approvals").insert({
         ticket_id: activeTicket.id,
-        action: triage.approval_action || "issue_refund",
-        reason: triage.approval_reason || "Guest requested refund/compensation",
-        proposed_payload: {
-          amount: triage.approval_amount || 100,
-          guest_name: guestName,
-          guest_room: guestRoom,
-          complaint: message,
-        },
+        action,
+        reason,
+        proposed_payload: payload,
         status: "pending",
       });
     }

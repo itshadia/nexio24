@@ -84,12 +84,18 @@ export default function TicketDetailsPage() {
     const room = t.customer_room || "your room";
     const cat = (t.category || "").toLowerCase();
 
-    if (cat === "refund" || app?.action === "issue_refund") {
+    // 1. If real refund request
+    if (cat === "refund") {
       const amt = app?.proposed_payload?.amount || 100;
       return `Hello ${name}, I have personally reviewed and approved your refund request for $${amt}. The adjustment has been applied to your reservation account. We apologize for the inconvenience and hope you enjoy the remainder of your stay.`;
     }
 
+    // 2. If maintenance or window / room change
     if (cat === "maintenance") {
+      const lowerSubj = (t.subject || "").toLowerCase();
+      if (lowerSubj.includes("window") || lowerSubj.includes("change") || lowerSubj.includes("shift")) {
+        return `Hello ${name}, we sincerely apologize for the inconvenience with your room window. Our front desk and engineering teams have confirmed your room shift. We will attend to you within the hour to coordinate your smooth transfer.`;
+      }
       return `Hello ${name}, I have escalated your request regarding "${t.subject}". Our engineering specialist Tariq has been dispatched to ${room} with replacement parts and will arrive within 8 minutes. Please let us know if we can assist you with anything else in the meantime.`;
     }
 
@@ -355,6 +361,20 @@ export default function TicketDetailsPage() {
             >
               Status: {statusStr}
             </span>
+
+            {/* Direct Header Action: Mark as Resolved / Reopen */}
+            <button
+              onClick={() => handleAction(isResolved ? "approve" : "resolve")}
+              disabled={actionLoading}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                isResolved
+                  ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600"
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>{isResolved ? "Reopen Ticket" : "Resolve Issue"}</span>
+            </button>
           </div>
         </div>
 
@@ -847,14 +867,27 @@ export default function TicketDetailsPage() {
               </div>
 
               {/* Financial approval banner if pending refund */}
+              {/* Approval banner based on category & action */}
               {approval && approval.status === "pending" && (
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
                   <div className="flex items-center gap-1.5 font-bold">
                     <DollarSign className="w-4 h-4 text-amber-700" />
                     <span>Refund Approval Requested: ${approval.proposed_payload?.amount || 100}</span>
+                    {categoryStr === "refund" ? (
+                      <>
+                        <DollarSign className="w-4 h-4 text-amber-700" />
+                        <span>Refund Approval Requested: ${approval.proposed_payload?.amount || 100}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wrench className="w-4 h-4 text-amber-700" />
+                        <span>Room Repair / Shift Authorization Requested</span>
+                      </>
+                    )}
                   </div>
                   <p className="text-[11px] text-amber-700">
                     Reason: "{approval.reason}"
+                    Reason: "{approval.reason || 'Staff managerial authorization required'}"
                   </p>
                 </div>
               )}
@@ -873,11 +906,11 @@ export default function TicketDetailsPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 pt-2">
+              <div className="space-y-2 pt-2">
                 <button
                   onClick={() => handleAction("approve")}
                   disabled={actionLoading || isApproved || isResolved}
-                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-emerald-600 disabled:cursor-default text-white rounded-xl shadow-xs text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-emerald-600 disabled:cursor-default text-white rounded-xl shadow-xs text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   {actionLoading ? (
                     <RotateCw className="w-3.5 h-3.5 animate-spin" />
@@ -887,29 +920,36 @@ export default function TicketDetailsPage() {
                   <span>
                     {isApproved
                       ? "Approved & Dispatched"
-                      : approval
+                      : categoryStr === "refund"
                       ? "Approve Refund & Send Reply"
-                      : "Approve & Send to Guest"}
+                      : "Approve Dispatch & Send Reply"}
                   </span>
                 </button>
 
-                <button
-                  onClick={() => handleAction("escalate")}
-                  disabled={actionLoading || isEscalated}
-                  className="px-3 py-2.5 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-slate-200/80"
-                  title="Escalate to Operations Manager"
-                >
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleAction(isResolved ? "approve" : "resolve")}
+                    disabled={actionLoading}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-colors cursor-pointer border flex items-center justify-center gap-1.5 shadow-2xs ${
+                      isResolved
+                        ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                        : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300"
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{isResolved ? "Reopen Ticket" : "Mark as Resolved"}</span>
+                  </button>
 
-                <button
-                  onClick={() => handleAction("resolve")}
-                  disabled={actionLoading || isResolved}
-                  className="px-3 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-slate-200/80"
-                  title="Mark as Resolved"
-                >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                </button>
+                  <button
+                    onClick={() => handleAction("escalate")}
+                    disabled={actionLoading || isEscalated}
+                    className="py-2 px-3 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-slate-200/80 flex items-center justify-center gap-1"
+                    title="Escalate to Operations Manager"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Escalate</span>
+                  </button>
+                </div>
               </div>
 
               {/* Success Notification Alert */}

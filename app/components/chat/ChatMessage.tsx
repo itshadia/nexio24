@@ -14,6 +14,7 @@ export default function ChatMessage({
   onSelectCardAction,
 }: ChatMessageProps) {
   const isUser = message.sender === "user";
+  const isStaff = message.sender === "staff";
 
   return (
     <div className={`flex gap-3 mb-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -22,10 +23,18 @@ export default function ChatMessage({
         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold shadow-xs ${
           isUser
             ? "bg-slate-900 text-white"
+            : isStaff
+            ? "bg-purple-700 text-white shadow-xs"
             : "bg-gradient-to-tr from-indigo-600 to-purple-600 text-white"
         }`}
       >
-        {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+        {isUser ? (
+          <User className="w-4 h-4" />
+        ) : isStaff ? (
+          <span className="text-xs">🛡️</span>
+        ) : (
+          <Bot className="w-4 h-4" />
+        )}
       </div>
 
       {/* Bubble Content */}
@@ -36,9 +45,22 @@ export default function ChatMessage({
             isUser ? "justify-end" : "justify-start"
           }`}
         >
-          <span className="font-semibold text-slate-600">
-            {isUser ? "You" : "Nexio24 AI Agent"}
+          <span
+            className={`font-semibold ${
+              isStaff ? "text-purple-700 font-bold" : "text-slate-600"
+            }`}
+          >
+            {isUser
+              ? "You"
+              : isStaff
+              ? message.senderName || "Hotel Management (Admin)"
+              : "Nexio24 AI Agent"}
           </span>
+          {isStaff && (
+            <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 text-[10px] font-bold">
+              Staff Direct
+            </span>
+          )}
           <span>•</span>
           <span>{message.timestamp}</span>
         </div>
@@ -48,6 +70,8 @@ export default function ChatMessage({
           className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs ${
             isUser
               ? "bg-indigo-600 text-white rounded-tr-xs"
+              : isStaff
+              ? "bg-purple-50 text-purple-950 border border-purple-200 rounded-tl-xs font-sans"
               : "bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs"
           }`}
         >

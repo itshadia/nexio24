@@ -83,6 +83,70 @@ export default function ChatWidget({
     }
   }, [initialPrompt]);
 
+  // If customer is logged in, find their active ticket to sync chat thread
+  useEffect(() => {
+    if (customer?.email && !sessionTicketId) {
+      fetch("/api/inbox")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.conversations) {
+            const userConv = data.conversations.find(
+              (c: any) => c.email?.toLowerCase() === customer.email.toLowerCase()
+            );
+            if (userConv?.id) {
+              setSessionTicketId(userConv.id);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [customer?.email, sessionTicketId]);
+
+  // Real-time polling for incoming staff messages and agent updates for the active ticket
+  useEffect(() => {
+    if (!isOpen || !sessionTicketId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/inbox?ticketId=${encodeURIComponent(sessionTicketId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.messages && data.messages.length > 0) {
+            setMessages((prev) => {
+              const currentTexts = new Set(prev.map((m) => m.text.trim()));
+              const newItems: MessageItem[] = [];
+
+              for (const m of data.messages) {
+                if (m.body && !currentTexts.has(m.body.trim())) {
+                  const isCustomer = m.direction === "inbound" || m.sender === "customer";
+                  const isStaff = m.sender === "staff";
+                  newItems.push({
+                    id: m.id || `msg-${Date.now()}-${Math.random()}`,
+                    sender: isCustomer ? "user" : isStaff ? "staff" : "agent",
+                    senderName: m.sender_name || (isStaff ? "Hotel Management" : "Nexio24 AI Concierge"),
+                    timestamp: m.created_at
+                      ? new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      : "Recently",
+                    text: m.body,
+                  });
+                }
+              }
+
+              if (newItems.length > 0) {
+                return [...prev, ...newItems];
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (e) {
+        // Silently ignore polling errors
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [isOpen, sessionTicketId]);
+
   const sendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputVal).trim();
     if (!query) return;
